@@ -1,0 +1,1586 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Planetary Seed Strategy — Biosphere + Hunger + Stability Math (Offline-First)</title>
+  <meta name="description" content="Scenario math for strategic seed planting + seed-infused packaging: biospheric benefit, civilizational stability proxy, and time-to-solve child hunger. Offline-first, local-only, IndexedDB state." />
+  <style>
+    /* =========================================================
+      UI / THEME
+      Tooltip: The style system is designed to be readable, printable,
+      and expandable without external dependencies. Edit :root to retheme.
+      Outcome: A cohesive, accessible UI that works offline and prints cleanly.
+    ========================================================== */
+    :root{
+      --bg:#070A12;
+      --panel:#0E1426;
+      --panel2:#0B1020;
+      --text:#EAF0FF;
+      --muted:#AAB5D6;
+      --line:rgba(255,255,255,.12);
+      --good:#44ff9a;
+      --warn:#ffd166;
+      --bad:#ff5c7a;
+      --accent:#8a7dff;
+      --accent2:#40c9ff;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 18px;
+      --radius2: 26px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      --max: 1100px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: var(--sans);
+      color:var(--text);
+      background:
+        radial-gradient(900px 600px at 15% 10%, rgba(138,125,255,.20), transparent 60%),
+        radial-gradient(700px 550px at 85% 20%, rgba(64,201,255,.16), transparent 60%),
+        radial-gradient(1000px 800px at 50% 120%, rgba(68,255,154,.10), transparent 60%),
+        linear-gradient(180deg, #050711, #070A12 60%, #050711);
+      overflow-x:hidden;
+    }
+
+    a{color:inherit}
+    .wrap{max-width:var(--max); margin:0 auto; padding:24px 16px 80px;}
+    .grid{display:grid; gap:16px;}
+    .grid2{display:grid; grid-template-columns: 1.2fr .8fr; gap:16px;}
+    @media (max-width: 980px){ .grid2{grid-template-columns:1fr;} }
+
+    .banner{
+      position:relative;
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border-radius: var(--radius2);
+      box-shadow: var(--shadow);
+      padding:18px 18px 14px;
+      overflow:hidden;
+    }
+    .banner::before{
+      content:"";
+      position:absolute; inset:-2px;
+      background:
+        radial-gradient(700px 250px at 15% 0%, rgba(138,125,255,.28), transparent 70%),
+        radial-gradient(700px 250px at 85% 0%, rgba(64,201,255,.22), transparent 70%),
+        radial-gradient(900px 450px at 50% 110%, rgba(68,255,154,.10), transparent 70%);
+      filter: blur(18px);
+      opacity:.75;
+      pointer-events:none;
+    }
+    .banner > *{position:relative}
+    h1{margin:0; font-size: 1.28rem; letter-spacing:.2px}
+    .sub{margin:6px 0 0; color:var(--muted); line-height:1.35}
+    .pillrow{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+    .pill{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:.86rem;
+      color:var(--muted);
+    }
+
+    /* Sticky Nav / TOC */
+    .toc{
+      position:sticky; top:10px; z-index:10;
+      border:1px solid var(--line);
+      background: rgba(11,16,32,.70);
+      backdrop-filter: blur(10px);
+      border-radius: 999px;
+      padding:10px 12px;
+      display:flex; gap:10px; align-items:center; justify-content:space-between;
+      box-shadow: var(--shadow);
+      margin:14px 0 18px;
+    }
+    .toc .left{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .toc a{
+      text-decoration:none;
+      border:1px solid transparent;
+      padding:6px 10px;
+      border-radius:999px;
+      color:var(--muted);
+      font-size:.9rem;
+    }
+    .toc a:hover{border-color:var(--line); color:var(--text)}
+    .toc .right{display:flex; gap:10px; align-items:center}
+    .search{
+      display:flex; gap:8px; align-items:center;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      padding:6px 10px;
+      border-radius:999px;
+      min-width: 260px;
+    }
+    .search input{
+      width:100%;
+      border:0; outline:none;
+      background:transparent;
+      color:var(--text);
+      font-size:.92rem;
+    }
+    @media (max-width: 640px){ .search{min-width: 0; flex:1;} .toc{border-radius: 22px;} }
+
+    .card{
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding:14px;
+    }
+    .card h2{margin:0 0 8px; font-size:1.06rem}
+    .muted{color:var(--muted)}
+    .tiny{font-size:.86rem}
+    .mono{font-family: var(--mono)}
+    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end}
+    .field{
+      flex:1 1 220px;
+      min-width: 210px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      border-radius: 14px;
+      padding:10px;
+    }
+    .field label{display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:.86rem}
+    .field input, .field select{
+      width:100%;
+      margin-top:6px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.18);
+      color:var(--text);
+      padding:8px 10px;
+      border-radius: 12px;
+      outline:none;
+    }
+    .field input:focus, .field select:focus{border-color: rgba(138,125,255,.6)}
+    .btnrow{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    button{
+      border:1px solid var(--line);
+      background: rgba(138,125,255,.14);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius: 14px;
+      cursor:pointer;
+      font-weight:600;
+      box-shadow: 0 8px 18px rgba(0,0,0,.25);
+    }
+    button:hover{filter: brightness(1.06)}
+    button.secondary{background: rgba(255,255,255,.06)}
+    button.danger{background: rgba(255,92,122,.15)}
+    .note{
+      border-left: 3px solid rgba(64,201,255,.7);
+      padding:10px 12px;
+      background: rgba(64,201,255,.06);
+      border-radius: 12px;
+      color: var(--muted);
+    }
+
+    /* Collapsible content */
+    details{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      border-radius: 16px;
+      padding:10px 12px;
+    }
+    details summary{
+      cursor:pointer;
+      list-style:none;
+      font-weight:700;
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px;
+    }
+    details summary::-webkit-details-marker{display:none}
+    details summary .tag{font-size:.82rem; color:var(--muted); font-weight:600}
+    details .content{padding:10px 2px 2px; color:var(--muted); line-height:1.45}
+    details .content code{color:var(--text); background: rgba(0,0,0,.20); padding:1px 6px; border-radius: 8px}
+
+    /* HUD */
+    .hud{
+      position:fixed; right:12px; bottom:12px; z-index:50;
+      width: 310px;
+      border:1px solid var(--line);
+      background: rgba(14,20,38,.78);
+      backdrop-filter: blur(10px);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .hudheader{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px 12px;
+      background: rgba(255,255,255,.04);
+      border-bottom:1px solid var(--line);
+    }
+    .hudheader strong{font-size:.95rem}
+    .hudheader .mini{color:var(--muted); font-size:.82rem}
+    .hudbody{padding:10px 12px}
+    .bar{
+      height:10px; border-radius:999px;
+      background: rgba(255,255,255,.08);
+      border:1px solid rgba(255,255,255,.10);
+      overflow:hidden;
+    }
+    .bar > i{display:block; height:100%; width:50%; background: linear-gradient(90deg, rgba(138,125,255,.95), rgba(64,201,255,.95));}
+    .hudgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px}
+    .stat{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.16);
+      border-radius: 14px;
+      padding:8px 10px;
+    }
+    .stat .k{color:var(--muted); font-size:.8rem}
+    .stat .v{font-weight:800; margin-top:2px}
+    .hud canvas{width:100%; height:140px; display:block; border-radius: 14px; margin-top:10px; background: rgba(0,0,0,.18); border:1px solid rgba(255,255,255,.10)}
+    .hud .hudbtns{display:flex; gap:8px; margin-top:10px}
+    .hud small{color:var(--muted)}
+    .hudtoggle{
+      position:fixed; right:12px; bottom:12px; z-index:51;
+      display:none;
+      border:1px solid var(--line);
+      background: rgba(14,20,38,.78);
+      backdrop-filter: blur(10px);
+      border-radius: 999px;
+      padding:10px 12px;
+      box-shadow: var(--shadow);
+      cursor:pointer;
+      color:var(--text);
+      font-weight:700;
+    }
+    @media (max-width: 760px){
+      .hud{width: calc(100% - 24px); right:12px; left:12px;}
+    }
+
+    /* Parallax sections */
+    .parallax{
+      position:relative;
+      border-radius: var(--radius2);
+      border:1px solid var(--line);
+      overflow:hidden;
+      padding:16px;
+      background: rgba(255,255,255,.03);
+    }
+    .parallax .bg{
+      position:absolute; inset:-40px;
+      background:
+        radial-gradient(700px 350px at 15% 10%, rgba(138,125,255,.22), transparent 65%),
+        radial-gradient(700px 350px at 80% 20%, rgba(64,201,255,.18), transparent 65%),
+        radial-gradient(900px 500px at 50% 100%, rgba(68,255,154,.10), transparent 70%);
+      transform: translate3d(0,0,0);
+      pointer-events:none;
+      filter: blur(10px);
+      opacity:.9;
+    }
+    .parallax .fg{position:relative}
+    .kpi{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:10px;
+      margin-top:10px;
+    }
+    @media (max-width: 860px){ .kpi{grid-template-columns:1fr;} }
+    .kpi .box{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.16);
+      border-radius: 16px;
+      padding:10px 12px;
+    }
+    .kpi .box .k{color:var(--muted); font-size:.82rem}
+    .kpi .box .v{font-weight:900; font-size:1.05rem; margin-top:4px}
+    .good{color:var(--good)}
+    .warn{color:var(--warn)}
+    .bad{color:var(--bad)}
+
+    /* Print stylesheet */
+    @media print{
+      body{background:#fff; color:#000}
+      .toc, .hud, .hudtoggle, .parallax .bg{display:none !important}
+      .card, .banner, details, .parallax{box-shadow:none; background:#fff; border-color:#ddd}
+      .muted{color:#333}
+      a{text-decoration:underline}
+    }
+
+    footer{
+      margin-top:18px;
+      border-top:1px solid var(--line);
+      padding-top:14px;
+      color:var(--muted);
+      font-size:.9rem;
+      line-height:1.4;
+    }
+    .hr{height:1px; background:var(--line); margin:14px 0}
+    .kbd{
+      font-family:var(--mono);
+      padding:1px 6px;
+      border:1px solid rgba(255,255,255,.18);
+      border-bottom-color: rgba(255,255,255,.30);
+      border-radius: 8px;
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      font-size:.86rem;
+    }
+  </style>
+</head>
+
+<body>
+  <!--
+    Zero-Harm & Anti-Inversion Note (visible in footer too):
+    This tool is local-only, stores data on your device, has no auto-send features,
+    and avoids coercive or harmful instructions. Use it to model regenerative outcomes,
+    not to pressure people or violate laws. Plant responsibly and with permission where required.
+  -->
+
+  <div class="wrap">
+    <section class="banner" id="top">
+      <h1>Planetary Sitrep Math: Strategic Seed Planting + Seed-Infused Packaging 🌱🛰️</h1>
+      <p class="sub">
+        Two scenario calculators:
+        (1) instruct students + workers to plant seeds on the way home (strategically),
+        (2) convert snack packaging into seed-infused mycelium/glucose paper materials.
+        All math is <span class="kbd">transparent</span>, <span class="kbd">editable</span>, and <span class="kbd">offline-first</span>.
+      </p>
+      <div class="pillrow">
+        <span class="pill">Local-only • No telemetry</span>
+        <span class="pill">Scenario ranges + alternate approaches</span>
+        <span class="pill">Biosphere (carbon/biodiversity proxies) + Hunger (calories) + Stability proxy</span>
+      </div>
+    </section>
+
+    <nav class="toc" aria-label="Sticky navigation">
+      <div class="left">
+        <a href="#model1">1) Commute Planting</a>
+        <a href="#model2">2) Seed Packaging</a>
+        <a href="#assumptions">Assumptions</a>
+        <a href="#notes">Notes</a>
+      </div>
+      <div class="right">
+        <div class="search" title="Client-side search (local-only). Filters visible sections.">
+          🔎 <input id="q" type="search" placeholder="Search (e.g., survival rate, calories, stability)..." />
+        </div>
+        <button class="secondary" id="toggleHudBtn" title="Toggle the HUD overlay (local-only).">HUD</button>
+      </div>
+    </nav>
+
+    <section class="parallax" id="overview" data-searchable>
+      <div class="bg" aria-hidden="true"></div>
+      <div class="fg">
+        <h2 style="margin:0 0 6px;">High-level outputs (auto-updated)</h2>
+        <p class="muted" style="margin:0 0 10px;">
+          These are not “truth,” they’re <span class="kbd">working models</span>. The point is to see what levers matter most.
+        </p>
+
+        <div class="kpi">
+          <div class="box">
+            <div class="k">Estimated annual edible calories produced (steady-state)</div>
+            <div class="v" id="kpiCalories">—</div>
+            <div class="muted tiny" id="kpiCaloriesSub">—</div>
+          </div>
+          <div class="box">
+            <div class="k">Children “fully covered” (by calorie-equivalent)</div>
+            <div class="v" id="kpiKids">—</div>
+            <div class="muted tiny" id="kpiKidsSub">—</div>
+          </div>
+          <div class="box">
+            <div class="k">Carbon sequestration proxy (trees only)</div>
+            <div class="v" id="kpiCO2">—</div>
+            <div class="muted tiny" id="kpiCO2Sub">—</div>
+          </div>
+        </div>
+
+        <div class="note" style="margin-top:12px">
+          <strong>Interpretation cheatcode 🧠</strong><br/>
+          Hunger is mostly an <em>access + income</em> problem, not a global production problem. So these models estimate
+          <span class="kbd">capacity</span> + <span class="kbd">redundancy</span> + <span class="kbd">resilience</span>:
+          how fast community-scale food buffers could grow if participation is massive.
+        </div>
+      </div>
+    </section>
+
+    <div class="grid2">
+      <section class="card" id="model1" data-searchable>
+        <h2>1) Strategic Commute Planting Model 🚶‍♂️🚶‍♀️🌱</h2>
+        <p class="muted tiny">
+          Tooltip: This models seeds planted per commute, survival rate, mix of “annual calorie crops” vs “perennial fruit trees,”
+          and time-to-maturity. Outcome: A rough estimate of calories/year, children covered, and carbon proxy over time.
+        </p>
+
+        <div class="row">
+          <div class="field" title="How many participants are actively planting?">
+            <label>Participants (students + workers) <span class="mono" id="m1_participants_out"></span></label>
+            <input id="m1_participants" type="number" min="0" step="1000" value="2000000" />
+          </div>
+
+          <div class="field" title="How many planting days per year?">
+            <label>Planting days/year <span class="mono" id="m1_days_out"></span></label>
+            <input id="m1_days" type="number" min="1" max="365" step="1" value="200" />
+          </div>
+
+          <div class="field" title="Average seeds (or seed-balls) planted per participant per day.">
+            <label>Seeds planted per day <span class="mono" id="m1_seeds_day_out"></span></label>
+            <input id="m1_seeds_day" type="number" min="0" step="1" value="3" />
+          </div>
+
+          <div class="field" title="Fraction that survive to be productive. Urban plantings can be rough.">
+            <label>Survival to productivity (%) <span class="mono" id="m1_survival_out"></span></label>
+            <input id="m1_survival" type="number" min="0" max="100" step="1" value="10" />
+          </div>
+
+          <div class="field" title="How much becomes perennial fruit/nut trees vs annual calories (beans/squash/potato-like yields).">
+            <label>Perennial share (%) <span class="mono" id="m1_perennial_out"></span></label>
+            <input id="m1_perennial" type="number" min="0" max="100" step="1" value="25" />
+          </div>
+
+          <div class="field" title="Average years before perennials provide meaningful harvest. Many fruit trees: 3–7 years.">
+            <label>Perennial maturity (years) <span class="mono" id="m1_maturity_out"></span></label>
+            <input id="m1_maturity" type="number" min="1" max="20" step="1" value="5" />
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row">
+          <div class="field" title="Average edible calories/year per productive annual plant cluster. This is a simplification.">
+            <label>Annual calories per productive plant/year <span class="mono" id="m1_anncal_out"></span></label>
+            <input id="m1_anncal" type="number" min="0" step="10" value="500" />
+          </div>
+
+          <div class="field" title="Average edible calories/year per productive perennial tree. Varies wildly.">
+            <label>Perennial calories per productive tree/year <span class="mono" id="m1_percal_out"></span></label>
+            <input id="m1_percal" type="number" min="0" step="100" value="30000" />
+          </div>
+
+          <div class="field" title="Carbon proxy: tonnes CO2e per tree per year (very rough). Early years smaller; later larger.">
+            <label>tCO₂e per tree/year (proxy) <span class="mono" id="m1_co2_out"></span></label>
+            <input id="m1_co2" type="number" min="0" step="0.01" value="0.02" />
+          </div>
+
+          <div class="field" title="Calories required per child per day. Default: ~1600 kcal/day.">
+            <label>Child kcal/day target <span class="mono" id="m1_kidkcal_out"></span></label>
+            <input id="m1_kidkcal" type="number" min="500" step="50" value="1600" />
+          </div>
+
+          <div class="field" title="How many children are you trying to cover? Put your goal here.">
+            <label>Target children to “solve” for <span class="mono" id="m1_targetkids_out"></span></label>
+            <input id="m1_targetkids" type="number" min="1" step="10000" value="1000000" />
+          </div>
+        </div>
+
+        <div class="btnrow" style="margin-top:12px">
+          <button id="m1_run" title="Compute outputs and award XP locally.">Run Model 1</button>
+          <button class="secondary" id="m1_set_conservative" title="Set a conservative assumption preset (harder conditions).">Conservative preset</button>
+          <button class="secondary" id="m1_set_optimistic" title="Set an optimistic assumption preset (better training + sites).">Optimistic preset</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <details open data-searchable>
+          <summary>
+            Results (Model 1) <span class="tag">calories • kids • years-to-goal • CO₂ proxy • stability proxy</span>
+          </summary>
+          <div class="content">
+            <div class="grid">
+              <div class="card" style="background: rgba(0,0,0,.12);">
+                <div class="mono" id="m1_results">Run the model to see numbers.</div>
+              </div>
+
+              <details>
+                <summary>Alternate approaches (Model 1) <span class="tag">same math, different levers</span></summary>
+                <div class="content">
+                  <ul>
+                    <li><strong>Seed-balls vs loose seeds</strong>: often boosts survival in dry/compacted soils. Model it by increasing <code>survival%</code>.</li>
+                    <li><strong>Micro-site mapping</strong>: planting where water already collects (downspouts, swales, park edges) can 2–5× survival. Model by raising survival.</li>
+                    <li><strong>Species strategy split</strong>: more annuals = faster calories; more perennials = stronger long-term carbon + stable yields. Adjust <code>perennial share</code>.</li>
+                    <li><strong>Community harvest logistics</strong>: without harvesting + distribution, “calories produced” won’t equal “kids fed.” Model this via the Stability/Access factor below (advanced).</li>
+                  </ul>
+                </div>
+              </details>
+
+              <details>
+                <summary>What this model does NOT include <span class="tag">honesty clause</span></summary>
+                <div class="content">
+                  It does not capture land rights, water constraints, pests, vandalism, distribution, cultural preferences, or economics.
+                  It’s a “capacity model” to show what scale could do. Reality needs governance + stewardship to turn yield into meals.
+                </div>
+              </details>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <aside class="card" data-searchable>
+        <h2>Interpretation: “Solve hunger” time 🧭</h2>
+        <p class="muted">
+          The fastest hunger wins often come from <strong>access mechanisms</strong> (school meals, income supports, logistics),
+          while planting is a <strong>buffer + resilience engine</strong>.
+        </p>
+
+        <details open>
+          <summary>Stability proxy (simple, editable) <span class="tag">not a prophecy</span></summary>
+          <div class="content">
+            We define a toy stability index:
+            <br/><br/>
+            <code>Stability = 100 × ( 0.55×H + 0.25×B + 0.20×P )</code>
+            <br/><br/>
+            Where:
+            <ul>
+              <li><code>H</code> = fraction of target child calories covered (0..1)</li>
+              <li><code>B</code> = biosphere benefit proxy from trees (scaled, 0..1)</li>
+              <li><code>P</code> = participation fraction proxy (how many people involved; 0..1)</li>
+            </ul>
+            It’s intentionally dumb-but-useful: it forces clarity about which lever you’re pulling.
+          </div>
+        </details>
+
+        <details>
+          <summary>Sanity-check defaults <span class="tag">why these numbers</span></summary>
+          <div class="content">
+            Defaults are set to “plausible but not magical.” For example:
+            <ul>
+              <li>Survival 10% is harsh but realistic in unmanaged environments.</li>
+              <li>Perennial maturity 5 years approximates many fruit trees’ first meaningful yields.</li>
+              <li>Annual calories 500/year per productive plant cluster is a simplification (beans/squash/potato-like outcomes).</li>
+              <li>Perennial calories 30k/year per productive tree is a mid-range placeholder.</li>
+              <li>Carbon proxy 0.02 tCO₂e/tree/year ≈ 20 kg CO₂e/year (order-of-magnitude).</li>
+            </ul>
+          </div>
+        </details>
+
+        <div class="note" style="margin-top:12px">
+          The single strongest “speed lever” is usually <strong>survival rate</strong>.
+          Training + site choice can outperform “more seeds” by a lot. 🎯
+        </div>
+      </aside>
+    </div>
+
+    <section class="card" id="model2" data-searchable>
+      <h2>2) Seed-Infused Packaging Model 🍫📦🍟 → 🌱</h2>
+      <p class="muted tiny">
+        Tooltip: This estimates how many seed-embedded wrappers enter circulation, what fraction get planted/composted properly,
+        germination/survival, and resulting calories + trees. Outcome: Another pathway to scale distributed planting.
+      </p>
+
+      <div class="row">
+        <div class="field" title="How many units of packaging per day are converted (e.g., bars, candy, chips)?">
+          <label>Converted packages/day <span class="mono" id="m2_pkg_out"></span></label>
+          <input id="m2_pkg" type="number" min="0" step="1000" value="5000000" />
+        </div>
+
+        <div class="field" title="Average seeds per package (could be 1-3, or micro-seeds).">
+          <label>Seeds per package <span class="mono" id="m2_seeds_out"></span></label>
+          <input id="m2_seeds" type="number" min="0" step="1" value="1" />
+        </div>
+
+        <div class="field" title="Fraction of packages that end up composted/planted rather than trashed/incinerated.">
+          <label>Proper end-of-life (%) <span class="mono" id="m2_eol_out"></span></label>
+          <input id="m2_eol" type="number" min="0" max="100" step="1" value="15" />
+        </div>
+
+        <div class="field" title="Seed germination rate within the material when properly handled.">
+          <label>Germination (%) <span class="mono" id="m2_germ_out"></span></label>
+          <input id="m2_germ" type="number" min="0" max="100" step="1" value="40" />
+        </div>
+
+        <div class="field" title="Survival to productivity after germination.">
+          <label>Survival to productivity (%) <span class="mono" id="m2_surv_out"></span></label>
+          <input id="m2_surv" type="number" min="0" max="100" step="1" value="10" />
+        </div>
+
+        <div class="field" title="Percent of successful plants that are perennials (trees) vs annuals.">
+          <label>Perennial share (%) <span class="mono" id="m2_perennial_out"></span></label>
+          <input id="m2_perennial" type="number" min="0" max="100" step="1" value="10" />
+        </div>
+
+        <div class="field" title="Days per year the program runs at full conversion.">
+          <label>Run days/year <span class="mono" id="m2_days_out"></span></label>
+          <input id="m2_days" type="number" min="1" max="365" step="1" value="330" />
+        </div>
+
+        <div class="field" title="Same calorie assumptions as Model 1 (editable).">
+          <label>Annual cal / plant-year <span class="mono" id="m2_anncal_out"></span></label>
+          <input id="m2_anncal" type="number" min="0" step="10" value="500" />
+        </div>
+
+        <div class="field" title="Perennial calories per productive tree-year (editable).">
+          <label>Perennial cal / tree-year <span class="mono" id="m2_percal_out"></span></label>
+          <input id="m2_percal" type="number" min="0" step="100" value="30000" />
+        </div>
+
+        <div class="field" title="Carbon proxy per tree-year, tonnes CO2e (editable).">
+          <label>tCO₂e per tree-year <span class="mono" id="m2_co2_out"></span></label>
+          <input id="m2_co2" type="number" min="0" step="0.01" value="0.02" />
+        </div>
+      </div>
+
+      <div class="btnrow" style="margin-top:12px">
+        <button id="m2_run" title="Compute outputs and award XP locally.">Run Model 2</button>
+        <button class="secondary" id="m2_set_conservative" title="Conservative preset (lower compliance).">Conservative preset</button>
+        <button class="secondary" id="m2_set_optimistic" title="Optimistic preset (higher compost/plant adoption).">Optimistic preset</button>
+      </div>
+
+      <div class="hr"></div>
+
+      <details open data-searchable>
+        <summary>
+          Results (Model 2) <span class="tag">packages • successful plants • calories • CO₂ proxy</span>
+        </summary>
+        <div class="content">
+          <div class="card" style="background: rgba(0,0,0,.12);">
+            <div class="mono" id="m2_results">Run the model to see numbers.</div>
+          </div>
+
+          <details style="margin-top:10px;">
+            <summary>Alternate approaches (Model 2) <span class="tag">behavior + design levers</span></summary>
+            <div class="content">
+              <ul>
+                <li><strong>“Plant me” UX</strong>: include simple planting icon + QR to local-only instructions (no tracking). Boost <code>proper end-of-life%</code>.</li>
+                <li><strong>Compost partnerships</strong>: schools/worksites with bins convert litter → soil. Also boosts end-of-life.</li>
+                <li><strong>Seed choice</strong>: hardy natives/wildflowers for biodiversity, or edible annuals for food. Changes calorie vs biosphere outputs.</li>
+                <li><strong>Material science constraint</strong>: seeds must survive heat/pressure; you’d likely use seed capsules embedded in the paper matrix. Model impact via <code>germination%</code>.</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+      </details>
+    </section>
+
+    <section class="card" id="assumptions" data-searchable>
+      <h2>Assumptions & “Alternate Math” Options 🧪</h2>
+
+      <details open>
+        <summary>Option A: “Calories-first” approach <span class="tag">fast hunger buffers</span></summary>
+        <div class="content">
+          Use more annual crops (higher annual share), emphasize small plots, community gardens, school garden corridors.
+          In the model: lower <code>perennial share</code>, raise <code>annual calories</code> if stewardship exists.
+        </div>
+      </details>
+
+      <details>
+        <summary>Option B: “Resilience-first” approach <span class="tag">future-proofing</span></summary>
+        <div class="content">
+          Increase perennials (fruit/nut trees, berry shrubs, native food forests). You get slower initial food output but stronger
+          long-term stability + carbon + habitat. In the model: raise <code>perennial share</code>, accept maturity lag.
+        </div>
+      </details>
+
+      <details>
+        <summary>Option C: “Access-first” approach <span class="tag">real-world hunger logic</span></summary>
+        <div class="content">
+          Pair planting with <em>distribution</em>: school meal programs, community fridges, harvest crews, local co-ops.
+          Math trick: multiply produced calories by an “access factor” (0..1). This page currently assumes access factor ~1 for simplicity.
+          If you want brutal honesty: set access factor to 0.2–0.6 unless you build distribution.
+        </div>
+      </details>
+
+      <details>
+        <summary>What counts as “solved” here? <span class="tag">definition matters</span></summary>
+        <div class="content">
+          This calculator uses “calorie-equivalent coverage” for a target number of children.
+          Real nutrition needs protein, micronutrients, culturally-appropriate food, and stability across seasons.
+          So treat “solved” as: <em>a strong buffer</em> unless paired with policy + logistics.
+        </div>
+      </details>
+    </section>
+
+    <section class="card" id="notes" data-searchable>
+      <h2>Practical Notes (Safety + Legality + Effectiveness) 🧭</h2>
+      <div class="note">
+        Plant responsibly. Avoid invasive species. Prefer native plants and approved edibles.
+        Don’t plant on private property without permission. The highest-impact legal path is
+        <strong>school/work gardens, park partnerships, and community plots</strong>—then use commuting as “micro-extension,” not trespass.
+      </div>
+
+      <details style="margin-top:10px;">
+        <summary>Attributions & Licensing <span class="tag">patterns, not copied code</span></summary>
+        <div class="content">
+          <ul>
+            <li>UI patterns inspired by common open web app conventions (sticky nav, cards, local-only storage). No third-party code copied.</li>
+            <li>All code here is original and dependency-free.</li>
+          </ul>
+        </div>
+      </details>
+
+      <footer>
+        <strong>Zero-Harm & Anti-Inversion note:</strong> This tool is local-only, stores preferences on your device, does not phone home,
+        and avoids coercive guidance. Use for regenerative planning and community well-being; don’t use it to pressure people or violate laws. 🌍🤝
+      </footer>
+    </section>
+  </div>
+
+  <!-- HUD Overlay (Local-only gamification) -->
+  <div class="hudtoggle" id="hudToggleMini" title="Show HUD">✨ HUD</div>
+  <div class="hud" id="hud" aria-live="polite">
+    <div class="hudheader">
+      <div>
+        <strong>Seed Ops HUD</strong>
+        <div class="mini" id="hudMini">local-only • no telemetry</div>
+      </div>
+      <button class="secondary" id="hudClose" title="Hide HUD">✕</button>
+    </div>
+    <div class="hudbody">
+      <div class="muted tiny">XP (earned by running models):</div>
+      <div class="bar" aria-label="XP progress"><i id="xpBar"></i></div>
+      <div class="hudgrid">
+        <div class="stat"><div class="k">Level</div><div class="v" id="hudLevel">—</div></div>
+        <div class="stat"><div class="k">XP</div><div class="v" id="hudXP">—</div></div>
+        <div class="stat"><div class="k">Runs</div><div class="v" id="hudRuns">—</div></div>
+        <div class="stat"><div class="k">Streak (days)</div><div class="v" id="hudStreak">—</div></div>
+      </div>
+
+      <canvas id="constellation" width="560" height="280" aria-label="Constellation-style state visualizer"></canvas>
+      <small>
+        Constellation nodes represent: calories, kids covered, trees, CO₂ proxy, participation.
+        It’s a vibe-meter, not a scientific instrument. ✨
+      </small>
+
+      <div class="hudbtns">
+        <button class="secondary" id="saveNow" title="Persist current settings to IndexedDB (local-only).">Save</button>
+        <button class="danger" id="resetAll" title="Reset local data (IndexedDB) and HUD progress.">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <noscript>
+    <div style="max-width:1100px;margin:18px auto;padding:12px 16px;border:1px solid #ccc;border-radius:12px;background:#fff;color:#000;">
+      <strong>Noscript mode:</strong> JavaScript is required for calculations and local storage.
+      You can still read the assumptions and notes, but the calculators won’t run.
+    </div>
+  </noscript>
+
+  <script>
+    /* =========================================================
+      SAFETY + INPUT SANITIZATION
+      Tooltip: All inputs are clamped to safe numeric ranges and
+      string search is sanitized. This prevents weird injection
+      and keeps the UI stable.
+      Outcome: No console errors, fewer footguns, and safer offline usage.
+    ========================================================== */
+    const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+    const num = (v, def=0) => {
+      const x = Number(v);
+      return Number.isFinite(x) ? x : def;
+    };
+
+    const fmt = (n) => {
+      if (!Number.isFinite(n)) return "—";
+      const abs = Math.abs(n);
+      if (abs >= 1e12) return (n/1e12).toFixed(2) + "T";
+      if (abs >= 1e9)  return (n/1e9).toFixed(2) + "B";
+      if (abs >= 1e6)  return (n/1e6).toFixed(2) + "M";
+      if (abs >= 1e3)  return (n/1e3).toFixed(2) + "K";
+      return n.toLocaleString(undefined, {maximumFractionDigits: 2});
+    };
+    const fmtInt = (n) => Math.round(n).toLocaleString();
+    const fmtPct = (n) => (n*100).toFixed(1) + "%";
+    const fmtYears = (y) => {
+      if (!Number.isFinite(y)) return "—";
+      if (y < 1) return (y*12).toFixed(1) + " months";
+      return y.toFixed(2) + " years";
+    };
+
+    /* =========================================================
+      INDEXEDDB (OFFLINE STATE)
+      Tooltip: Stores calculator inputs, HUD XP, and preferences
+      entirely on-device. No network calls.
+      Outcome: Your scenarios persist across reloads and offline use.
+    ========================================================== */
+    const DB_NAME = "seed_ops_local_db";
+    const DB_VER  = 1;
+    const STORE   = "kv";
+
+    function idbOpen(){
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VER);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(STORE)){
+            db.createObjectStore(STORE);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function idbSet(key, value){
+      const db = await idbOpen();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).put(value, key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+    async function idbGet(key){
+      const db = await idbOpen();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readonly");
+        const req = tx.objectStore(STORE).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function idbClear(){
+      const db = await idbOpen();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).clear();
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    /* =========================================================
+      MODEL MATH
+      Tooltip: Two transparent scenario functions. They compute:
+        - seeds -> productive plants/trees
+        - calories/year (annual + perennial with maturity lag)
+        - kids covered by calories
+        - carbon proxy from trees
+        - stability proxy (toy model)
+      Outcome: A “lever map” showing what changes outcomes fastest.
+    ========================================================== */
+
+    function modelCommute(inp){
+      // Inputs (already clamped upstream)
+      const participants = inp.participants;
+      const days = inp.days;
+      const seedsDay = inp.seedsDay;
+      const survival = inp.survival;           // fraction 0..1
+      const perennialShare = inp.perennialShare; // fraction 0..1
+      const maturityYears = inp.maturityYears;
+
+      const annCal = inp.annCal; // per productive annual plant-year
+      const perCal = inp.perCal; // per productive tree-year
+      const co2 = inp.co2;       // tCO2e per tree-year
+      const kidKcalDay = inp.kidKcalDay;
+      const targetKids = inp.targetKids;
+
+      // Core counts
+      const plantedSeedsPerYear = participants * days * seedsDay;
+      const productivePlantsTotal = plantedSeedsPerYear * survival;
+
+      const productivePerennials = productivePlantsTotal * perennialShare;
+      const productiveAnnuals = productivePlantsTotal * (1 - perennialShare);
+
+      // Steady-state calories (once perennials mature)
+      const annualCaloriesYear = productiveAnnuals * annCal;
+      const perennialCaloriesYear = productivePerennials * perCal;
+
+      // Perennial ramp: assume linear ramp 0..1 over maturityYears (simple)
+      // We compute "time to reach target" by solving with ramp + annuals constant.
+      const kidCaloriesYear = kidKcalDay * 365;
+      const targetCaloriesYear = targetKids * kidCaloriesYear;
+
+      // Carbon proxy (steady-state)
+      const co2Year = productivePerennials * co2;
+
+      // Solve years-to-goal (toy):
+      // For year t:
+      // calories(t) = annualCaloriesYear + perennialCaloriesYear * min(1, t/maturityYears)
+      // We find smallest t where calories(t) >= targetCaloriesYear
+      let yearsToGoal = Infinity;
+      if (targetCaloriesYear <= 0){
+        yearsToGoal = 0;
+      } else {
+        // If annuals alone already solve:
+        if (annualCaloriesYear >= targetCaloriesYear){
+          yearsToGoal = 1e-6; // effectively immediate in this model
+        } else {
+          // If perennials eventually make it possible:
+          const maxCalories = annualCaloriesYear + perennialCaloriesYear;
+          if (maxCalories < targetCaloriesYear){
+            yearsToGoal = Infinity;
+          } else {
+            // Need a t where annual + per*min(1,t/m) >= target
+            // If solution occurs before maturity:
+            const neededFromPerennials = targetCaloriesYear - annualCaloriesYear;
+            const tLinear = (neededFromPerennials / perennialCaloriesYear) * maturityYears;
+            yearsToGoal = clamp(tLinear, 0, maturityYears);
+            // If tLinear > maturityYears, then it's reached at maturity (because after that it's steady)
+            if (tLinear > maturityYears) yearsToGoal = maturityYears;
+          }
+        }
+      }
+
+      // Kids covered steady-state
+      const kidsCoveredSteady = (annualCaloriesYear + perennialCaloriesYear) / kidCaloriesYear;
+
+      // Toy stability proxy components scaled
+      // H: fraction of target covered at steady-state (cap 1)
+      const H = clamp((annualCaloriesYear + perennialCaloriesYear) / (targetCaloriesYear || 1), 0, 1);
+      // B: scale co2Year against a large-ish normalization to stay 0..1; set norm = 50,000 tCO2/yr
+      const B = clamp(co2Year / 50000, 0, 1);
+      // P: scale participants against a normalization of 10 million
+      const P = clamp(participants / 10000000, 0, 1);
+      const stability = 100 * (0.55*H + 0.25*B + 0.20*P);
+
+      return {
+        plantedSeedsPerYear,
+        productivePlantsTotal,
+        productiveAnnuals,
+        productivePerennials,
+        annualCaloriesYear,
+        perennialCaloriesYear,
+        caloriesYearSteady: annualCaloriesYear + perennialCaloriesYear,
+        kidsCoveredSteady,
+        targetCaloriesYear,
+        yearsToGoal,
+        co2Year,
+        stability
+      };
+    }
+
+    function modelPackaging(inp){
+      const pkgPerDay = inp.pkgPerDay;
+      const seedsPerPkg = inp.seedsPerPkg;
+      const eol = inp.eol;     // fraction proper end-of-life
+      const germ = inp.germ;   // fraction germination
+      const surv = inp.surv;   // fraction survival to productivity
+      const perennialShare = inp.perennialShare; // fraction
+      const days = inp.days;
+
+      const annCal = inp.annCal;
+      const perCal = inp.perCal;
+      const co2 = inp.co2;
+
+      const seedsYear = pkgPerDay * days * seedsPerPkg;
+      const properlyHandled = seedsYear * eol;
+      const germinated = properlyHandled * germ;
+      const productivePlantsTotal = germinated * surv;
+
+      const productivePerennials = productivePlantsTotal * perennialShare;
+      const productiveAnnuals = productivePlantsTotal * (1 - perennialShare);
+
+      const annualCaloriesYear = productiveAnnuals * annCal;
+      const perennialCaloriesYear = productivePerennials * perCal;
+      const co2Year = productivePerennials * co2;
+
+      return {
+        seedsYear,
+        properlyHandled,
+        germinated,
+        productivePlantsTotal,
+        productiveAnnuals,
+        productivePerennials,
+        annualCaloriesYear,
+        perennialCaloriesYear,
+        caloriesYearSteady: annualCaloriesYear + perennialCaloriesYear,
+        co2Year
+      };
+    }
+
+    /* =========================================================
+      HUD / GAMIFICATION (LOCAL-ONLY)
+      Tooltip: XP + Level for running models. This is optional and
+      stored locally. No manipulation, no dark patterns.
+      Outcome: A gentle progress layer for consistent scenario work.
+    ========================================================== */
+    const hudEl = document.getElementById("hud");
+    const hudToggleMini = document.getElementById("hudToggleMini");
+    const toggleHudBtn = document.getElementById("toggleHudBtn");
+    const hudClose = document.getElementById("hudClose");
+
+    const state = {
+      xp: 0,
+      runs: 0,
+      streakDays: 0,
+      lastRunDate: null,
+      hudVisible: true,
+      lastOutputs: {
+        calories: 0,
+        kids: 0,
+        trees: 0,
+        co2: 0,
+        participation: 0
+      }
+    };
+
+    function xpToLevel(xp){
+      // Simple curve: level increases with sqrt(xp)
+      return Math.floor(Math.sqrt(xp / 100)) + 1;
+    }
+    function levelProgress(xp){
+      const lvl = xpToLevel(xp);
+      const base = (lvl-1)*(lvl-1)*100;
+      const next = lvl*lvl*100;
+      const t = (xp - base) / (next - base);
+      return clamp(t, 0, 1);
+    }
+    function todayKey(){
+      const d = new Date();
+      return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    }
+    function awardXP(amount){
+      amount = clamp(amount, 0, 500);
+      const today = todayKey();
+      if (state.lastRunDate === today){
+        // Same day: no streak increment
+      } else {
+        // New day streak logic
+        if (state.lastRunDate){
+          const prev = new Date(state.lastRunDate);
+          const now = new Date(today);
+          const diffDays = Math.round((now - prev) / (1000*60*60*24));
+          if (diffDays === 1) state.streakDays += 1;
+          else state.streakDays = 1;
+        } else {
+          state.streakDays = 1;
+        }
+        state.lastRunDate = today;
+      }
+      state.xp += amount;
+      state.runs += 1;
+      renderHUD();
+    }
+
+    function renderHUD(){
+      const lvl = xpToLevel(state.xp);
+      const prog = levelProgress(state.xp);
+      document.getElementById("hudLevel").textContent = String(lvl);
+      document.getElementById("hudXP").textContent = fmtInt(state.xp);
+      document.getElementById("hudRuns").textContent = fmtInt(state.runs);
+      document.getElementById("hudStreak").textContent = fmtInt(state.streakDays);
+      document.getElementById("xpBar").style.width = (prog*100).toFixed(1) + "%";
+      drawConstellation();
+    }
+
+    function showHUD(show){
+      state.hudVisible = !!show;
+      hudEl.style.display = state.hudVisible ? "block" : "none";
+      hudToggleMini.style.display = state.hudVisible ? "none" : "inline-flex";
+    }
+
+    toggleHudBtn.addEventListener("click", () => showHUD(!state.hudVisible));
+    hudClose.addEventListener("click", () => showHUD(false));
+    hudToggleMini.addEventListener("click", () => showHUD(true));
+
+    /* =========================================================
+      CONSTELLATION VISUALIZER
+      Tooltip: A tiny canvas “state constellation” that maps key
+      outputs to node positions. It’s aesthetic feedback.
+      Outcome: A quick glance at whether your scenario is “big”.
+    ========================================================== */
+    const canvas = document.getElementById("constellation");
+    const ctx = canvas.getContext("2d");
+
+    function drawConstellation(){
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0,0,w,h);
+
+      // Soft grid
+      ctx.globalAlpha = 0.25;
+      for (let i=0;i<10;i++){
+        const y = (i+1)*h/11;
+        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y);
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Normalize outputs to 0..1
+      const o = state.lastOutputs;
+      const nCalories = clamp(o.calories / 1e12, 0, 1);        // 1T cal/yr scale
+      const nKids     = clamp(o.kids / 1e6, 0, 1);             // 1M kids scale
+      const nTrees    = clamp(o.trees / 1e7, 0, 1);            // 10M trees scale
+      const nCO2      = clamp(o.co2 / 1e5, 0, 1);              // 100k tCO2/yr scale
+      const nPart     = clamp(o.participation / 1e7, 0, 1);    // 10M participants scale
+
+      const nodes = [
+        {name:"Calories", t:nCalories},
+        {name:"Kids", t:nKids},
+        {name:"Trees", t:nTrees},
+        {name:"CO₂", t:nCO2},
+        {name:"Participation", t:nPart},
+      ];
+
+      // Place nodes around a circle, radius depends on t
+      const cx = w*0.5, cy = h*0.52;
+      const R0 = Math.min(w,h)*0.32;
+      const pts = nodes.map((node, i) => {
+        const a = (i / nodes.length) * Math.PI*2 - Math.PI/2;
+        const R = R0*(0.45 + 0.55*node.t);
+        return { ...node, x: cx + Math.cos(a)*R, y: cy + Math.sin(a)*R };
+      });
+
+      // Connect lines
+      ctx.strokeStyle = "rgba(138,125,255,0.55)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        if (i===0) ctx.moveTo(p.x,p.y);
+        else ctx.lineTo(p.x,p.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+
+      // Draw nodes
+      pts.forEach(p => {
+        const r = 6 + 10*p.t;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,r,0,Math.PI*2);
+        ctx.fillStyle = "rgba(64,201,255,0.50)";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(255,255,255,0.22)";
+        ctx.stroke();
+
+        ctx.font = "12px " + getComputedStyle(document.body).fontFamily;
+        ctx.fillStyle = "rgba(234,240,255,0.85)";
+        ctx.fillText(p.name, p.x + r + 6, p.y + 4);
+      });
+
+      // Center glint
+      ctx.beginPath();
+      ctx.arc(cx,cy,5,0,Math.PI*2);
+      ctx.fillStyle = "rgba(68,255,154,0.55)";
+      ctx.fill();
+    }
+
+    /* =========================================================
+      PARALLAX
+      Tooltip: Gentle parallax for atmosphere. No images needed.
+      Outcome: Long-form vibe without external assets.
+    ========================================================== */
+    const parallaxEls = Array.from(document.querySelectorAll(".parallax .bg"));
+    window.addEventListener("mousemove", (e) => {
+      const x = (e.clientX / window.innerWidth) - 0.5;
+      const y = (e.clientY / window.innerHeight) - 0.5;
+      parallaxEls.forEach(el => {
+        el.style.transform = `translate3d(${x*18}px, ${y*14}px, 0)`;
+      });
+    }, {passive:true});
+
+    /* =========================================================
+      SEARCH (CLIENT-SIDE)
+      Tooltip: Filters visible blocks by simple substring search.
+      Outcome: Quick navigation in a long page, offline.
+    ========================================================== */
+    const q = document.getElementById("q");
+    let lastSearchTs = 0;
+
+    q.addEventListener("input", () => {
+      // Gentle rate limiting (prevents overwork and keeps UI smooth)
+      const now = Date.now();
+      if (now - lastSearchTs < 60) return;
+      lastSearchTs = now;
+
+      const term = (q.value || "").toLowerCase().replace(/[^\w\s\-%/]/g, "").trim();
+      const blocks = document.querySelectorAll("[data-searchable]");
+      blocks.forEach(b => {
+        const text = b.innerText.toLowerCase();
+        b.style.display = (!term || text.includes(term)) ? "" : "none";
+      });
+    });
+
+    /* =========================================================
+      INPUT BINDING + OUTPUT RENDER
+      Tooltip: Keeps displayed mini readouts next to inputs and
+      updates KPIs after each run.
+      Outcome: Clear, immediate feedback.
+    ========================================================== */
+    function bindOut(id, outId, suffix=""){
+      const el = document.getElementById(id);
+      const out = document.getElementById(outId);
+      const update = () => { out.textContent = (el.value ? (String(el.value) + suffix) : ""); };
+      el.addEventListener("input", update);
+      update();
+    }
+
+    // Model 1 outputs
+    bindOut("m1_participants","m1_participants_out");
+    bindOut("m1_days","m1_days_out");
+    bindOut("m1_seeds_day","m1_seeds_day_out");
+    bindOut("m1_survival","m1_survival_out","%");
+    bindOut("m1_perennial","m1_perennial_out","%");
+    bindOut("m1_maturity","m1_maturity_out");
+    bindOut("m1_anncal","m1_anncal_out");
+    bindOut("m1_percal","m1_percal_out");
+    bindOut("m1_co2","m1_co2_out");
+    bindOut("m1_kidkcal","m1_kidkcal_out");
+    bindOut("m1_targetkids","m1_targetkids_out");
+
+    // Model 2 outputs
+    bindOut("m2_pkg","m2_pkg_out");
+    bindOut("m2_seeds","m2_seeds_out");
+    bindOut("m2_eol","m2_eol_out","%");
+    bindOut("m2_germ","m2_germ_out","%");
+    bindOut("m2_surv","m2_surv_out","%");
+    bindOut("m2_perennial","m2_perennial_out","%");
+    bindOut("m2_days","m2_days_out");
+    bindOut("m2_anncal","m2_anncal_out");
+    bindOut("m2_percal","m2_percal_out");
+    bindOut("m2_co2","m2_co2_out");
+
+    function readModel1(){
+      return {
+        participants: clamp(num(document.getElementById("m1_participants").value, 0), 0, 2e9),
+        days: clamp(num(document.getElementById("m1_days").value, 200), 1, 365),
+        seedsDay: clamp(num(document.getElementById("m1_seeds_day").value, 1), 0, 200),
+        survival: clamp(num(document.getElementById("m1_survival").value, 10)/100, 0, 1),
+        perennialShare: clamp(num(document.getElementById("m1_perennial").value, 25)/100, 0, 1),
+        maturityYears: clamp(num(document.getElementById("m1_maturity").value, 5), 1, 30),
+        annCal: clamp(num(document.getElementById("m1_anncal").value, 500), 0, 500000),
+        perCal: clamp(num(document.getElementById("m1_percal").value, 30000), 0, 5000000),
+        co2: clamp(num(document.getElementById("m1_co2").value, 0.02), 0, 2),
+        kidKcalDay: clamp(num(document.getElementById("m1_kidkcal").value, 1600), 500, 3500),
+        targetKids: clamp(num(document.getElementById("m1_targetkids").value, 1000000), 1, 2e9),
+      };
+    }
+
+    function readModel2(){
+      return {
+        pkgPerDay: clamp(num(document.getElementById("m2_pkg").value, 0), 0, 2e10),
+        seedsPerPkg: clamp(num(document.getElementById("m2_seeds").value, 1), 0, 50),
+        eol: clamp(num(document.getElementById("m2_eol").value, 15)/100, 0, 1),
+        germ: clamp(num(document.getElementById("m2_germ").value, 40)/100, 0, 1),
+        surv: clamp(num(document.getElementById("m2_surv").value, 10)/100, 0, 1),
+        perennialShare: clamp(num(document.getElementById("m2_perennial").value, 10)/100, 0, 1),
+        days: clamp(num(document.getElementById("m2_days").value, 330), 1, 365),
+        annCal: clamp(num(document.getElementById("m2_anncal").value, 500), 0, 500000),
+        perCal: clamp(num(document.getElementById("m2_percal").value, 30000), 0, 5000000),
+        co2: clamp(num(document.getElementById("m2_co2").value, 0.02), 0, 2),
+      };
+    }
+
+    function updateKPIs(m1, m2){
+      const totalCal = (m1?.caloriesYearSteady || 0) + (m2?.caloriesYearSteady || 0);
+      const kidYear = (readModel1().kidKcalDay * 365);
+      const kids = totalCal / kidYear;
+
+      const trees = (m1?.productivePerennials || 0) + (m2?.productivePerennials || 0);
+      const co2 = (m1?.co2Year || 0) + (m2?.co2Year || 0);
+
+      document.getElementById("kpiCalories").textContent = fmt(totalCal) + " kcal/year";
+      document.getElementById("kpiCaloriesSub").textContent = "Model 1 + Model 2 (steady-state; perennials assumed mature).";
+
+      document.getElementById("kpiKids").textContent = fmt(kids) + " children";
+      document.getElementById("kpiKidsSub").textContent = "Equivalent full-year calories at current kid kcal/day target.";
+
+      document.getElementById("kpiCO2").textContent = fmt(co2) + " tCO₂e/year";
+      document.getElementById("kpiCO2Sub").textContent = "Proxy from productive perennials only (order-of-magnitude).";
+
+      state.lastOutputs = {
+        calories: totalCal,
+        kids: kids,
+        trees: trees,
+        co2: co2,
+        participation: readModel1().participants
+      };
+      renderHUD();
+    }
+
+    let lastM1 = null, lastM2 = null;
+
+    function renderM1(res){
+      const kidYear = readModel1().kidKcalDay * 365;
+      const targetKids = readModel1().targetKids;
+      const targetCal = targetKids * kidYear;
+
+      const goalStr = (res.yearsToGoal === Infinity)
+        ? `Not reachable under current assumptions (even at steady-state).`
+        : (res.yearsToGoal < 0.01)
+          ? `Immediate in this model (annuals alone meet target).`
+          : `Approx time-to-target: ${fmtYears(res.yearsToGoal)} (perennial ramp included).`;
+
+      const txt =
+`MODEL 1 — Commute Planting
+Planted seeds/year: ${fmtInt(res.plantedSeedsPerYear)}
+Productive plants total/year: ${fmtInt(res.productivePlantsTotal)}
+
+Split:
+• Productive annuals: ${fmtInt(res.productiveAnnuals)}
+• Productive perennials (trees/shrubs): ${fmtInt(res.productivePerennials)}
+
+Calories (steady-state):
+• Annual calories/year: ${fmt(res.annualCaloriesYear)}
+• Perennial calories/year: ${fmt(res.perennialCaloriesYear)}
+• Total calories/year: ${fmt(res.caloriesYearSteady)}
+
+Child hunger target (calorie-equivalent):
+• Target kids: ${fmtInt(targetKids)}
+• Target kcal/year: ${fmt(targetCal)}
+• Kids covered at steady-state: ${fmt(res.kidsCoveredSteady)}
+
+Time-to-target:
+• ${goalStr}
+
+Biosphere proxy:
+• CO₂ proxy (trees): ${fmt(res.co2Year)} tCO₂e/year
+
+Civilizational stability proxy (0–100):
+• Stability ≈ ${res.stability.toFixed(1)} / 100
+`;
+      document.getElementById("m1_results").textContent = txt;
+    }
+
+    function renderM2(res){
+      const txt =
+`MODEL 2 — Seed-Infused Packaging
+Seeds/year embedded: ${fmtInt(res.seedsYear)}
+Properly handled (planted/composted): ${fmtInt(res.properlyHandled)}
+Germinated: ${fmtInt(res.germinated)}
+Productive plants total: ${fmtInt(res.productivePlantsTotal)}
+
+Split:
+• Productive annuals: ${fmtInt(res.productiveAnnuals)}
+• Productive perennials: ${fmtInt(res.productivePerennials)}
+
+Calories (steady-state):
+• Annual calories/year: ${fmt(res.annualCaloriesYear)}
+• Perennial calories/year: ${fmt(res.perennialCaloriesYear)}
+• Total calories/year: ${fmt(res.caloriesYearSteady)}
+
+Biosphere proxy:
+• CO₂ proxy (trees): ${fmt(res.co2Year)} tCO₂e/year
+`;
+      document.getElementById("m2_results").textContent = txt;
+    }
+
+    /* =========================================================
+      PRESETS
+      Tooltip: Quick scenario toggles.
+      Outcome: See sensitivity without manual tweaking.
+    ========================================================== */
+    function setM1Conservative(){
+      document.getElementById("m1_seeds_day").value = 2;
+      document.getElementById("m1_survival").value = 5;
+      document.getElementById("m1_perennial").value = 20;
+      document.getElementById("m1_maturity").value = 6;
+      document.getElementById("m1_anncal").value = 350;
+      document.getElementById("m1_percal").value = 20000;
+      document.getElementById("m1_co2").value = 0.015;
+      refreshOuts();
+    }
+    function setM1Optimistic(){
+      document.getElementById("m1_seeds_day").value = 5;
+      document.getElementById("m1_survival").value = 25;
+      document.getElementById("m1_perennial").value = 35;
+      document.getElementById("m1_maturity").value = 4;
+      document.getElementById("m1_anncal").value = 800;
+      document.getElementById("m1_percal").value = 45000;
+      document.getElementById("m1_co2").value = 0.03;
+      refreshOuts();
+    }
+    function setM2Conservative(){
+      document.getElementById("m2_eol").value = 8;
+      document.getElementById("m2_germ").value = 25;
+      document.getElementById("m2_surv").value = 6;
+      document.getElementById("m2_perennial").value = 8;
+      refreshOuts();
+    }
+    function setM2Optimistic(){
+      document.getElementById("m2_eol").value = 30;
+      document.getElementById("m2_germ").value = 60;
+      document.getElementById("m2_surv").value = 15;
+      document.getElementById("m2_perennial").value = 12;
+      refreshOuts();
+    }
+
+    function refreshOuts(){
+      // Re-bind mini outputs quickly (no heavy loops)
+      const ids = [
+        ["m1_participants","m1_participants_out",""],
+        ["m1_days","m1_days_out",""],
+        ["m1_seeds_day","m1_seeds_day_out",""],
+        ["m1_survival","m1_survival_out","%"],
+        ["m1_perennial","m1_perennial_out","%"],
+        ["m1_maturity","m1_maturity_out",""],
+        ["m1_anncal","m1_anncal_out",""],
+        ["m1_percal","m1_percal_out",""],
+        ["m1_co2","m1_co2_out",""],
+        ["m1_kidkcal","m1_kidkcal_out",""],
+        ["m1_targetkids","m1_targetkids_out",""],
+        ["m2_pkg","m2_pkg_out",""],
+        ["m2_seeds","m2_seeds_out",""],
+        ["m2_eol","m2_eol_out","%"],
+        ["m2_germ","m2_germ_out","%"],
+        ["m2_surv","m2_surv_out","%"],
+        ["m2_perennial","m2_perennial_out","%"],
+        ["m2_days","m2_days_out",""],
+        ["m2_anncal","m2_anncal_out",""],
+        ["m2_percal","m2_percal_out",""],
+        ["m2_co2","m2_co2_out",""],
+      ];
+      for (const [id, outId, suf] of ids){
+        const el = document.getElementById(id);
+        const out = document.getElementById(outId);
+        out.textContent = (el.value ? (String(el.value) + suf) : "");
+      }
+    }
+
+    /* =========================================================
+      SAVE / LOAD
+      Tooltip: Save inputs + HUD state to IndexedDB.
+      Outcome: Offline persistence without cookies or servers.
+    ========================================================== */
+    async function saveAll(){
+      const snapshot = {
+        m1: readModel1(),
+        m2: readModel2(),
+        hud: {
+          xp: state.xp,
+          runs: state.runs,
+          streakDays: state.streakDays,
+          lastRunDate: state.lastRunDate,
+          hudVisible: state.hudVisible,
+          lastOutputs: state.lastOutputs
+        }
+      };
+      await idbSet("snapshot", snapshot);
+      document.getElementById("hudMini").textContent = "saved locally ✓";
+      setTimeout(()=> document.getElementById("hudMini").textContent = "local-only • no telemetry", 1200);
+    }
+
+    async function loadAll(){
+      const snap = await idbGet("snapshot");
+      if (!snap) return;
+      // Restore inputs
+      const setVal = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+      // Model 1
+      setVal("m1_participants", snap.m1?.participants ?? 2000000);
+      setVal("m1_days", snap.m1?.days ?? 200);
+      setVal("m1_seeds_day", snap.m1?.seedsDay ?? 3);
+      setVal("m1_survival", ((snap.m1?.survival ?? 0.10) * 100));
+      setVal("m1_perennial", ((snap.m1?.perennialShare ?? 0.25) * 100));
+      setVal("m1_maturity", snap.m1?.maturityYears ?? 5);
+      setVal("m1_anncal", snap.m1?.annCal ?? 500);
+      setVal("m1_percal", snap.m1?.perCal ?? 30000);
+      setVal("m1_co2", snap.m1?.co2 ?? 0.02);
+      setVal("m1_kidkcal", snap.m1?.kidKcalDay ?? 1600);
+      setVal("m1_targetkids", snap.m1?.targetKids ?? 1000000);
+
+      // Model 2
+      setVal("m2_pkg", snap.m2?.pkgPerDay ?? 5000000);
+      setVal("m2_seeds", snap.m2?.seedsPerPkg ?? 1);
+      setVal("m2_eol", ((snap.m2?.eol ?? 0.15) * 100));
+      setVal("m2_germ", ((snap.m2?.germ ?? 0.40) * 100));
+      setVal("m2_surv", ((snap.m2?.surv ?? 0.10) * 100));
+      setVal("m2_perennial", ((snap.m2?.perennialShare ?? 0.10) * 100));
+      setVal("m2_days", snap.m2?.days ?? 330);
+      setVal("m2_anncal", snap.m2?.annCal ?? 500);
+      setVal("m2_percal", snap.m2?.perCal ?? 30000);
+      setVal("m2_co2", snap.m2?.co2 ?? 0.02);
+
+      // HUD
+      state.xp = snap.hud?.xp ?? 0;
+      state.runs = snap.hud?.runs ?? 0;
+      state.streakDays = snap.hud?.streakDays ?? 0;
+      state.lastRunDate = snap.hud?.lastRunDate ?? null;
+      state.hudVisible = snap.hud?.hudVisible ?? true;
+      state.lastOutputs = snap.hud?.lastOutputs ?? state.lastOutputs;
+      refreshOuts();
+      showHUD(state.hudVisible);
+      renderHUD();
+
+      // Auto rerun to populate outputs
+      runM1(false);
+      runM2(false);
+    }
+
+    async function resetAll(){
+      await idbClear();
+      // Reset state
+      state.xp = 0; state.runs = 0; state.streakDays = 0; state.lastRunDate = null;
+      state.lastOutputs = {calories:0,kids:0,trees:0,co2:0,participation:0};
+      renderHUD();
+
+      // Reset UI defaults (same as initial)
+      document.getElementById("m1_participants").value = 2000000;
+      document.getElementById("m1_days").value = 200;
+      document.getElementById("m1_seeds_day").value = 3;
+      document.getElementById("m1_survival").value = 10;
+      document.getElementById("m1_perennial").value = 25;
+      document.getElementById("m1_maturity").value = 5;
+      document.getElementById("m1_anncal").value = 500;
+      document.getElementById("m1_percal").value = 30000;
+      document.getElementById("m1_co2").value = 0.02;
+      document.getElementById("m1_kidkcal").value = 1600;
+      document.getElementById("m1_targetkids").value = 1000000;
+
+      document.getElementById("m2_pkg").value = 5000000;
+      document.getElementById("m2_seeds").value = 1;
+      document.getElementById("m2_eol").value = 15;
+      document.getElementById("m2_germ").value = 40;
+      document.getElementById("m2_surv").value = 10;
+      document.getElementById("m2_perennial").value = 10;
+      document.getElementById("m2_days").value = 330;
+      document.getElementById("m2_anncal").value = 500;
+      document.getElementById("m2_percal").value = 30000;
+      document.getElementById("m2_co2").value = 0.02;
+
+      refreshOuts();
+      document.getElementById("m1_results").textContent = "Reset complete. Run the model to see numbers.";
+      document.getElementById("m2_results").textContent = "Reset complete. Run the model to see numbers.";
+      updateKPIs(null, null);
+    }
+
+    document.getElementById("saveNow").addEventListener("click", saveAll);
+    document.getElementById("resetAll").addEventListener("click", resetAll);
+
+    /* =========================================================
+      RUNNERS
+      Tooltip: Execute models, update outputs, award XP, and save.
+      Outcome: One-click “what if” exploration.
+    ========================================================== */
+    function runM1(award=true){
+      const inp = readModel1();
+      const res = modelCommute(inp);
+      lastM1 = res;
+      renderM1(res);
+      updateKPIs(lastM1, lastM2);
+
+      if (award) awardXP(30);
+    }
+    function runM2(award=true){
+      const inp = readModel2();
+      const res = modelPackaging(inp);
+      lastM2 = res;
+      renderM2(res);
+      updateKPIs(lastM1, lastM2);
+
+      if (award) awardXP(25);
+    }
+
+    document.getElementById("m1_run").addEventListener("click", async () => { runM1(true); await saveAll(); });
+    document.getElementById("m2_run").addEventListener("click", async () => { runM2(true); await saveAll(); });
+
+    document.getElementById("m1_set_conservative").addEventListener("click", () => { setM1Conservative(); runM1(true); });
+    document.getElementById("m1_set_optimistic").addEventListener("click", () => { setM1Optimistic(); runM1(true); });
+
+    document.getElementById("m2_set_conservative").addEventListener("click", () => { setM2Conservative(); runM2(true); });
+    document.getElementById("m2_set_optimistic").addEventListener("click", () => { setM2Optimistic(); runM2(true); });
+
+    // Optional: auto-run on input change (lightly rate-limited)
+    let autoTs = 0;
+    document.addEventListener("input", (e) => {
+      const id = e.target?.id || "";
+      if (!id.startsWith("m1_") && !id.startsWith("m2_")) return;
+      const now = Date.now();
+      if (now - autoTs < 180) return;
+      autoTs = now;
+      refreshOuts();
+      // Don’t spam XP on auto-run; compute silently
+      runM1(false);
+      runM2(false);
+    });
+
+    /* =========================================================
+      BOOT
+      Tooltip: Load saved state if present; initialize UI.
+      Outcome: Starts with meaningful numbers and no errors.
+    ========================================================== */
+    (async function boot(){
+      showHUD(true);
+      renderHUD();
+      refreshOuts();
+      await loadAll(); // if none, it simply returns
+      // Ensure outputs exist even on first run:
+      runM1(false);
+      runM2(false);
+    })();
+  </script>
+</body>
+</html>
